@@ -1,5 +1,5 @@
 
-__author__ = 'vincent farcette'
+__author__ = 'Vincent Farcette'
 
 
 class AutomateMeta(type):
