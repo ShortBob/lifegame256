@@ -18,6 +18,8 @@ class AutomateMeta(type):
 
     # It is absolutely necessary to declare rule_number as a kwarg.
     def __new__(mcs, name, bases, namespace, *, rule_number=None):
+        if not isinstance(rule_number, int):
+            raise TypeError('`rule_number` argument is meant to be int, found {} instead.'.format(type(rule_number)))
 
         def next_step(self, initial_conditions):
             """
