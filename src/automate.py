@@ -16,8 +16,8 @@ class AutomateMeta(type):
     Automate30 = AutomateMeta('Automate30', (object,) , {'metaclass": AutomateMeta, ...}, rule_number=rule_number)
     """
 
-    # It is absolutely necessary to declare rule_number as a kwarg.
-    def __new__(mcs, name, bases, namespace, *, rule_number=None):
+    # It is absolutely necessary to have **kwargs. Declaring explicitly rule_number is meant as a reminder
+    def __new__(mcs, name, bases, namespace, *_, rule_number=None, **kwargs):
         if not isinstance(rule_number, int):
             raise TypeError('`rule_number` argument is meant to be int, found {} instead.'.format(type(rule_number)))
 
@@ -36,8 +36,8 @@ class AutomateMeta(type):
         namespace.update({'_rule_number': rule_number, 'next_step': next_step})
         return super().__new__(mcs, name, bases, dict(namespace))
 
-    # It is absolutely necessary to declare rule_number as a kwarg.
-    def __init__(cls, name, bases, namespace, *, rule_number=None):
+    # It is absolutely necessary to have **kwargs. Declaring explicitly rule_number is meant as a reminder
+    def __init__(cls, name, bases, namespace, *_, rule_number=None, **kwargs):
         super().__init__(name, bases, namespace)
 
 
