@@ -6,15 +6,17 @@ LINES = 30
 
 if __name__ == '__main__':
     automate_cache = AutomateCache()
-    automate_30 = automate_cache.get(30)
-    gen = liner(automate_30)
-    lines = []
-    for i, line in enumerate(gen()):
-        lines.append(tuple(line))
-        if i > LINES:
-            break
+    for rule_number in range(0, 256):
+        automate_n = automate_cache.get(rule_number)
+        print('{:*^25}'.format(automate_n.__class__.__name__))
+        gen = liner(automate_n)
+        lines = []
+        for i, line in enumerate(gen()):
+            lines.append(line)
+            if i > LINES:
+                break
 
-    for i, line in enumerate(lines):
-        print(''.ljust((int((LINES * 2 + 1) / 2)) - (i % 1) - int(i / 2)), end='')
-        print(''.join([str(c) for c in line]))
+        for i, line in enumerate(lines):
+            print(''.ljust(LINES - i + 1), end='')
+            print(''.join(['X' if c == 1 else ' ' for c in line]))
 
