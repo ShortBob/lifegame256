@@ -74,9 +74,9 @@ class AutomateCache(object):
     @classmethod
     def _create_automate_class(cls, rule_number):
         if not isinstance(rule_number, int):
-            raise TypeError('Only numbers can be considered as valid rule_number.')
-        if not 0 <= rule_number <= 255 :
-            raise ValueError('Only rules 0 <= rule_number <= 255 makes sense.')
+            raise TypeError('Only int can be considered as valid rule_number. {} found instead.'.format(type(int)))
+        if not 0 <= rule_number <= 255:
+            raise ValueError('Only rules with 0 <= rule_number <= 255 makes sense.')
         name = 'Automate{}'.format(rule_number)
         bases = (object,)
         namespace = {'metaclass': AutomateMeta}
