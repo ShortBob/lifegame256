@@ -1,37 +1,35 @@
 
 from os import path, curdir
 from src.automate import AutomateCache
-from src.lines import liner
+from src.lines import Liner
 
 
-def _gather_raw_lines(automate_n, number_of_line_to_print, seed):
-    gen = liner(automate_n, seed)
+def _gather_raw_lines(running_plan, seed):
+    liner = Liner(running_plan, seed)
     lines = []
-    for i, line in enumerate(gen()):
+    for line in liner.generator():
         lines.append(line)
-        if i > number_of_line_to_print:
-            break
     return lines
 
 
-def _formatted_lines(lines, number_of_line_to_print, pyramidal=True):
-    for i, line in enumerate(lines):
+def _formatted_lines(lines):
+    max_length = max(lines, key=lambda l: len(l))
+    padding = int(max_length / 2)
+    for padding, line in zip(padding, lines):
         yield ''.join(
             [
-                ''.ljust(number_of_line_to_print - i + 1 if pyramidal else 0),
+                ''.ljust(padding),
                 ''.join(['X' if c == 1 else ' ' for c in line])
             ]
         )
 
 
-def custom(numb_line_to_print=0, seed=(1,), rules=(i for i in range(0, 256))):
-    automate_cache = AutomateCache()
-    for rule_number in rules:
-        automate_n = automate_cache.get(rule_number)
-        print('{:*^25}'.format(automate_n.__class__.__name__))
-        lines = _gather_raw_lines(automate_n, numb_line_to_print, seed)
-        for printable in _formatted_lines(lines, numb_line_to_print):
-            print(printable)
+def custom(running_plan, seed=(1,)):
+    print('Seed={}\nExecuting : {}'.format(seed, running_plan))
+    lines = _gather_raw_lines(running_plan, seed)
+    print("Compute over.")
+    for line in _formatted_lines(lines):
+        print(line)
 
 
 def every_256_on_n_lines(number_of_line_to_print, seed):
@@ -51,11 +49,14 @@ def rule_to_file(rule_number, number_of_line_to_print, file_path_string, pyramid
 
 if __name__ == '__main__':
     custom(
-        60,
+        (
+            {'direction': '+', 'automate': 101, 'lines': 20},
+            {'direction': '=', 'automate': 101, 'lines': 20},
+            {'direction': '-', 'automate': 101, 'lines': 20},
+        ),
         # seed=' X XXXX  X    X  XX  XXX   X   XX   X  ',
         # seed='X XX       XXXXXXXXXXX                    XXXXX         XXXXXXX  XXX  XXX           X',
         seed='X',
-        rules=(225, 195, 193, 169, 149, 137, 121, 105, 101, 89, 30),
     )
     # every_256_on_n_lines(30, seed='X XX       XXXXXXXXXXX                    XXXXX         XXXXXXX  XXX  XXX           X')
     # rule_to_file(101, 3000, 'automate101')
