@@ -1,33 +1,32 @@
 
 from os import path, curdir
 from src.automate import AutomateCache
-from src.lines import Liner
+from src.lines import computed_plan
 
 
 def _gather_raw_lines(running_plan, seed):
-    liner = Liner(running_plan, seed)
+    liner = computed_plan(running_plan, seed)
     lines = []
-    for line in liner.generator():
+    for line in liner:
         lines.append(line)
     return lines
 
 
 def _formatted_lines(lines):
-    max_length = max(lines, key=lambda l: len(l))
-    padding = int(max_length / 2)
-    for padding, line in zip(padding, lines):
+    max_length = len(max(lines, key=lambda l: len(l)))
+    max_padding = int(max_length / 2)
+    for line in lines:
         yield ''.join(
             [
-                ''.ljust(padding),
-                ''.join(['X' if c == 1 else ' ' for c in line])
+                ''.ljust(max_padding - int(len(line)/2), '%'),
+                ''.join(['X' if c == 1 else ' ' for c in line]),
+                ''.ljust(max_padding - int(len(line)/2), '%'),
             ]
         )
 
 
 def custom(running_plan, seed=(1,)):
-    print('Seed={}\nExecuting : {}'.format(seed, running_plan))
     lines = _gather_raw_lines(running_plan, seed)
-    print("Compute over.")
     for line in _formatted_lines(lines):
         print(line)
 
