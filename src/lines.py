@@ -1,5 +1,5 @@
 
-from collections import deque
+from collections import Iterable, deque
 from src.automate import AutomateCache
 
 
@@ -26,9 +26,10 @@ class LinerMeta(type):
 
     @classmethod
     def check_running_plan(mcs, running_plan):
-        if not isinstance(running_plan, (tuple, list)):
-            raise ValueError('running_plan have to be tuple or list')
-        for inner_plan in running_plan:
+        if not isinstance(running_plan, Iterable):
+            raise ValueError('running_plan have to be an Iterable')
+        (*rp,) = running_plan
+        for inner_plan in rp:
             if not isinstance(inner_plan, dict):
                 raise ValueError('every item in running_plan have to be dict')
             if not 0 == len(set(mcs.__RUNNING_PLAN_DEF.keys()) ^ set(inner_plan.keys())):
@@ -41,6 +42,7 @@ class LinerMeta(type):
                     raise ValueError('value: {} of key: {} in running_plan item is not check compliant'.format(
                         value, key
                     ))
+        return rp
 
     @classmethod
     def _step_with_appender(mcs, appender_func, automate, l0, l1):
@@ -124,8 +126,11 @@ class LinerMeta(type):
             lines_count -= 1
 
         while lines_count > 0:
+            print("Before yeilding : len(l0):{}, len(l1){}".format(len(l0), len(l1)))
             yield from mcs._step_with_appender(mcs._ascending_long_seed_appender, automate, l0, l1)
+            print("After yeilding : len(l0):{}, len(l1){}".format(len(l0), len(l1)))
             l0, l1 = l1, l0
+            print("After inverting : len(l0):{}, len(l1){}".format(len(l0), len(l1)))
             lines_count -= 1
 
     @classmethod
@@ -163,7 +168,7 @@ class LinerMeta(type):
             lines_count -= 1
 
     def __new__(mcs, name, bases, namespace, *_, running_plan=None, seed=(1,), **kwargs):
-        mcs.check_running_plan(running_plan)
+        rp = mcs.check_running_plan(running_plan)
         checked_seed = mcs.check_seed(seed)
         cache = AutomateCache()
 
@@ -171,13 +176,13 @@ class LinerMeta(type):
         namespace.update(
             {
                 '_seed': checked_seed,
-                '_running_plan': running_plan,
+                '_running_plan': rp,
                 '_cache': cache,
             }
         )
 
         _executable_plans = []
-        for one_plan in running_plan:
+        for one_plan in rp:
             direction = one_plan['direction']
             automate_instance = cache.get(one_plan['automate'])
             lines = one_plan['lines']
@@ -198,12 +203,24 @@ class LinerMeta(type):
         )
 
         def __iter__(self):
+            nx_func, nx_automate, nx_lines = None, None, None
             try:
                 while True:
                     nx_func, nx_automate, nx_lines = next(self._executable_plans_it)
+                    print("Trying {}, {}, {}, len(l0):{}, len(l1){}".format(
+                        nx_func, nx_automate, nx_lines, len(self._l0), len(self._l1))
+                    )
                     yield from nx_func(nx_automate, nx_lines, self._l0, self._l1)
+                    print("After {}, {}, {}, len(l0):{}, len(l1){}".format(
+                        nx_func, nx_automate, nx_lines, len(self._l0), len(self._l1))
+                    )
             except StopIteration:
                 pass
+            except Exception:
+                print("Error when {}, {}, {}, len(l0):{}, len(l1){}".format(
+                    nx_func, nx_automate, nx_lines, len(self._l0), len(self._l1))
+                )
+                raise
 
         namespace.update({'__iter__': __iter__})
 
