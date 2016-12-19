@@ -1,6 +1,5 @@
 
 from os import path, curdir
-from src.automate import AutomateCache
 from src.lines import computed_plan
 
 
