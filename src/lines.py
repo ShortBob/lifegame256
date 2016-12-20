@@ -1,46 +1,71 @@
 
-from collections import deque
+from collections import Iterable, Sized, deque, namedtuple
 from src.automate import AutomateCache
 
 
-class LinerMeta(type):
+RunningPlanItem = namedtuple('RunningPlan', ('direction', 'automate', 'lines'))
 
-    __RUNNING_PLAN_DEF = {
-        'direction': lambda d: d in ('+', '=', '-'),
-        'automate': lambda a: isinstance(a, int) and 0 <= a <= 255,
-        'lines': lambda l: isinstance(l, int) and l >= 0,
-    }
+running_plan_item_definition = RunningPlanItem(
+    lambda d: d in ('+', '=', '-'),
+    lambda a: isinstance(a, int) and 0 <= a <= 255,
+    lambda l: isinstance(l, int) and l >= 0,
+)
 
-    @classmethod
-    def check_seed(mcs, seed):
-        if not isinstance(seed, (tuple, list, deque, str)):
-            raise ValueError('seed have to be tuple, list, deque, or str')
-        if not all(isinstance(s, int) or s in (' ', 'X') for s in seed):
-            raise ValueError('seed must be int or "X  X XXX X". Found : {}'.format(seed))
-        if len(seed) < 0:
-            raise ValueError('seed ca not be empty')
-        if isinstance(seed, str):
-            (*seed2,) = (1 if s == 'X' else 0 for s in seed)
-            return seed2
-        return tuple(seed)
 
-    @classmethod
-    def check_running_plan(mcs, running_plan):
-        if not isinstance(running_plan, (tuple, list)):
-            raise ValueError('running_plan have to be tuple or list')
-        for inner_plan in running_plan:
-            if not isinstance(inner_plan, dict):
-                raise ValueError('every item in running_plan have to be dict')
-            if not 0 == len(set(mcs.__RUNNING_PLAN_DEF.keys()) ^ set(inner_plan.keys())):
+def validate_and_return_seed(seed):
+    if not isinstance(seed, (tuple, list, deque, str)):
+        raise ValueError('seed have to be tuple, list, deque, or str')
+    if not all(isinstance(s, int) or s in (' ', 'X') for s in seed):
+        raise ValueError('seed must be int or "X  X XXX X" (i.e. r"([X ]+)"). Found : {}'.format(seed))
+    if len(seed) < 0:
+        raise ValueError('seed can not be empty')
+    if isinstance(seed, str):
+        (*seed2,) = (1 if s == 'X' else 0 for s in seed)
+        return seed2
+    return tuple(seed)
+
+
+def validate_and_return_running_plan(running_plan):
+    validated = []
+    test_direction = running_plan_item_definition.direction
+    test_automate = running_plan_item_definition.automate
+    test_lines = running_plan_item_definition.lines
+
+    if not isinstance(running_plan, Iterable) and not isinstance(running_plan, (str, bytes)):
+        raise ValueError('running_plan have to be an Iterable')
+
+    for inner_plan in running_plan:
+        if isinstance(inner_plan, dict):
+            if not 0 == len(set(running_plan_item_definition._fields) ^ set(inner_plan.keys())):
                 raise KeyError('authorised and mandatory keys in running_plan item have to be {}'.format(
-                    mcs.__RUNNING_PLAN_DEF.keys())
+                    running_plan_item_definition._fields)
                 )
             for key, value in inner_plan.items():
-                test_lambda = mcs.__RUNNING_PLAN_DEF[key]
+                test_lambda = getattr(running_plan_item_definition, key, None)
                 if not test_lambda(value):
-                    raise ValueError('value: {} of key: {} in running_plan item is not check compliant'.format(
-                        value, key
+                    raise ValueError('value: {} of key: {} in running_plan item {} is not check compliant'.format(
+                        value, key, inner_plan
                     ))
+            validated.append(RunningPlanItem(**inner_plan))
+
+        elif isinstance(inner_plan, (Iterable, Sized)) and not isinstance(running_plan, (str, bytes)):
+            if len(inner_plan) != 3:
+                raise ValueError('running_plan iterable must be composed of three valued items like (X, Y, Z).')
+            direction, automate, lines = inner_plan
+            if not test_direction(direction) or not test_automate(automate) or not test_lines(lines):
+                raise ValueError('Invalid running_plan. Error lies in triplet ({}, {}, {})'.format(
+                    direction, automate, lines
+                ))
+            validated.append(RunningPlanItem(direction, automate, lines))
+
+        else:
+            raise ValueError('Every item in running_plan have to be dict or Iterable made of three items iterable.'
+                             ' Definition can be validated with lambda of running_plan_item_definition.')
+
+    return validated
+
+
+class LinerMeta(type):
 
     @classmethod
     def _step_with_appender(mcs, appender_func, automate, l0, l1):
@@ -113,74 +138,75 @@ class LinerMeta(type):
             mcs._append(automate, l1, x, y, z)
 
     @classmethod
-    def __ascending(mcs, automate, lines_count, l0, l1):
-        if len(l0) == 1:
-            yield from mcs._step_with_appender(mcs._ascending_one_cell_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+    def __ascending(mcs, self, automate, lines_count):
+        if len(self._l0) == 1:
+            yield from mcs._step_with_appender(mcs._ascending_one_cell_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
-        if len(l0) == 2:
-            yield from mcs._step_with_appender(mcs._ascending_two_cells_appender, automate, l0, l1)
+        if len(self._l0) == 2:
+            yield from mcs._step_with_appender(mcs._ascending_two_cells_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
         while lines_count > 0:
-            yield from mcs._step_with_appender(mcs._ascending_long_seed_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+            yield from mcs._step_with_appender(mcs._ascending_long_seed_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
     @classmethod
-    def __steadying(mcs, automate, lines_count, l0, l1):
-        if len(l0) == 1:
-            yield from mcs._step_with_appender(mcs._constant_one_cell_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+    def __steadying(mcs, self, automate, lines_count):
+        if len(self._l0) == 1:
+            yield from mcs._step_with_appender(mcs._constant_one_cell_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
-        if len(l0) == 2:
-            yield from mcs._step_with_appender(mcs._constant_two_cells_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+        if len(self._l0) == 2:
+            yield from mcs._step_with_appender(mcs._constant_two_cells_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
         while lines_count > 0:
-            yield from mcs._step_with_appender(mcs._constant_long_seed_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+            yield from mcs._step_with_appender(mcs._constant_long_seed_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
     @classmethod
-    def __descending(mcs, automate, lines_count, l0, l1):
-        if len(l0) == 1:
-            yield from mcs._step_with_appender(mcs._descending_one_cell_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+    def __descending(mcs, self, automate, lines_count):
+        if len(self._l0) == 1:
+            yield from mcs._step_with_appender(mcs._descending_one_cell_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
-        if len(l0) == 2:
-            yield from mcs._step_with_appender(mcs._descending_two_cells_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+        if len(self._l0) == 2:
+            yield from mcs._step_with_appender(mcs._descending_two_cells_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
         while lines_count > 0:
-            yield from mcs._step_with_appender(mcs._descending_long_seed_appender, automate, l0, l1)
-            l0, l1 = l1, l0
+            yield from mcs._step_with_appender(mcs._descending_long_seed_appender, automate, self._l0, self._l1)
+            self._l0, self._l1 = self._l1, self._l0
             lines_count -= 1
 
     def __new__(mcs, name, bases, namespace, *_, running_plan=None, seed=(1,), **kwargs):
-        mcs.check_running_plan(running_plan)
-        checked_seed = mcs.check_seed(seed)
+        rp = validate_and_return_running_plan(running_plan)
+        checked_seed = validate_and_return_seed(seed)
         cache = AutomateCache()
 
         namespace = dict(namespace)
         namespace.update(
             {
                 '_seed': checked_seed,
-                '_running_plan': running_plan,
+                '_running_plan': rp,
                 '_cache': cache,
             }
         )
 
         _executable_plans = []
-        for one_plan in running_plan:
-            direction = one_plan['direction']
-            automate_instance = cache.get(one_plan['automate'])
-            lines = one_plan['lines']
+        for one_plan in rp:
+            direction = one_plan.direction
+            automate_instance = cache.get(one_plan.automate)
+            lines = one_plan.lines
             if direction == '+':
                 _executable_plans.append((mcs.__ascending, automate_instance, lines))
             if direction == '=':
@@ -201,7 +227,7 @@ class LinerMeta(type):
             try:
                 while True:
                     nx_func, nx_automate, nx_lines = next(self._executable_plans_it)
-                    yield from nx_func(nx_automate, nx_lines, self._l0, self._l1)
+                    yield from nx_func(self, nx_automate, nx_lines)
             except StopIteration:
                 pass
 
