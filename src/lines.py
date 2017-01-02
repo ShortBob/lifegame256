@@ -1,9 +1,18 @@
 
+from os import path, curdir
 from collections import Iterable, Sized, deque, namedtuple
 from src.automate import AutomateCache
 
 
 RunningPlanItem = namedtuple('RunningPlan', ('direction', 'automate', 'lines'))
+RunningPlanItem.__doc__ = """
+namedtuple class representing a unitary value of a running plan.
+Each unit contains 'direction', 'automate' and 'lines'.
+Valid values are :
+        * direction : '+', '=' or '-'
+        * automate : 0 <= n <= 255
+        * lines : 0 < n
+"""
 
 running_plan_item_definition = RunningPlanItem(
     lambda d: d in ('+', '=', '-'),
@@ -13,6 +22,11 @@ running_plan_item_definition = RunningPlanItem(
 
 
 def validate_and_return_seed(seed):
+    """
+    Check if seed is valid (raises if not) and returns a valid (eventually converted) copy of it.
+    :param seed: Seed from which computation occurs. Have to be (0, 1, .., 1) like, or 'X X  ... X ' like.
+    :return: computed valid copy of seed.
+    """
     if not isinstance(seed, (tuple, list, deque, str)):
         raise ValueError('seed have to be tuple, list, deque, or str')
     if not all(isinstance(s, int) or s in (' ', 'X') for s in seed):
@@ -26,6 +40,29 @@ def validate_and_return_seed(seed):
 
 
 def validate_and_return_running_plan(running_plan):
+    """
+    Check if the given running_plan is valid and returns a copy of it.
+
+    Valid running plans are iterable. Every items inside it is supposed to be either a RunningPlanItem, a dict with
+    exactly 'direction', 'automate' and 'lines' has keys, or an raw three valued iterable with items compliant to
+    definition.
+
+    Example :
+    (
+        RunningPlanItem('+', 125, 12),
+        {'direction': '-', 'automate': 112, 'lines': 37},
+        ( ('=', 132, 23), ['-', 119, 11], )
+    )
+    Valid values are :
+        * direction : '+', '=' or '-'
+        * automate : 0 <= n <= 255
+        * lines : 0 < n
+
+    Pre-validation can be made using running_plan_item_definition which is RunningPlantItem
+    containing lambda instead of values which return True if the given value complies.
+    :param running_plan: Given running plan to check before copy and return
+    :return: New validated running plan, as tuple of RunningPlanItems.
+    """
     validated = []
     test_direction = running_plan_item_definition.direction
     test_automate = running_plan_item_definition.automate
@@ -43,8 +80,8 @@ def validate_and_return_running_plan(running_plan):
             for key, value in inner_plan.items():
                 test_lambda = getattr(running_plan_item_definition, key, None)
                 if not test_lambda(value):
-                    raise ValueError('value: {} of key: {} in running_plan item {} is not check compliant'.format(
-                        value, key, inner_plan
+                    raise ValueError('value: {} of key: {} in running_plan item {} is not check compliant. Code is {}'.format(
+                        value, key, inner_plan, getattr(running_plan_item_definition, key, None).__code__
                     ))
             validated.append(RunningPlanItem(**inner_plan))
 
@@ -66,6 +103,10 @@ def validate_and_return_running_plan(running_plan):
 
 
 class LinerMeta(type):
+    """
+    Metaclass to use to create custom designed class made that its instance is an iterable returning computed lines
+    from a given seed and a given running plan.
+    """
 
     @classmethod
     def _step_with_appender(mcs, appender_func, automate, l0, l1):
@@ -189,6 +230,17 @@ class LinerMeta(type):
             lines_count -= 1
 
     def __new__(mcs, name, bases, namespace, *_, running_plan=None, seed=(1,), **kwargs):
+        """
+        Creates a new class designed to run given plan from given seed.
+        :param name: New class name
+        :param bases: New class bases (intended to be (object, ))
+        :param namespace: New class namespace
+        :param _: throw out args for signature coherence
+        :param running_plan: The given running plan to run
+        :param seed: The given seed to run from
+        :param kwargs: throw out kwargs for signature coherence
+        :return: Custom class
+        """
         rp = validate_and_return_running_plan(running_plan)
         checked_seed = validate_and_return_seed(seed)
         cache = AutomateCache()
@@ -240,8 +292,70 @@ class LinerMeta(type):
 
 
 def computed_plan(running_plan, seed):
+    """
+    Returns an instance of AutomatePlanExecutor, designed to execute the given running plan, from the given seed.
+    """
     name = 'AutomatePlanExecutor'
     bases = (object,)
     namespace = {'metaclass': LinerMeta}
     custom_class_runner = LinerMeta(name, bases, namespace, running_plan=running_plan, seed=seed)
     return custom_class_runner()
+
+
+def custom(running_plan, seed=(1,), call_back=print, align=True):
+    """
+    Execute running_plan starting from seed, using call_back to handle every line result, eventually aligned.
+    :param running_plan: Plan to run
+    :param seed: Seed from which start computing
+    :param call_back: Called for every result line
+    :param align: Tell whether or not lines have to be formatted (i.e. padded)
+    """
+    lines = _gather_raw_lines(running_plan, seed)
+    final_lines = _align_lines(lines) if align else lines
+    for line in final_lines:
+        call_back(line)
+
+
+def _gather_raw_lines(running_plan, seed):
+    liner = computed_plan(running_plan, seed)
+    lines = []
+    for line in liner:
+        lines.append(line)
+    return lines
+
+
+def _align_lines(lines):
+    max_length = len(max(lines, key=lambda l: len(l)))
+    max_padding = int(max_length / 2)
+    for line in lines:
+        yield ''.join(
+            [
+                ''.ljust(max_padding + 1 - int(len(line)/2), '|'),
+                ''.join(['X' if c == 1 else ' ' for c in line]),
+                ''.ljust(max_padding + 1 - int(len(line)/2), '|'),
+            ]
+        )
+
+
+def plan_to_file(file_path_from_curdir, running_plan, seed, align):
+    """
+    Use it to simply write execution result to a given file.
+    It uses custom with an already given call_back function that print every line into the given file.
+    :param file_path_from_curdir: Path of the destination file seen from os.curdir
+    :param running_plan: Running plan to execute
+    :param seed: Seed from which execute the running_plan
+    :param align: If True, result lines are aligned (left and right padding)
+    """
+    file_path = path.join(path.abspath(curdir), file_path_from_curdir)
+    with open(file_path, 'w') as output:
+
+        def printer(line):
+            output.write(line)
+            output.write('\n')
+
+        custom(
+            running_plan=running_plan,
+            seed=seed,
+            call_back=printer,
+            align=align,
+        )
