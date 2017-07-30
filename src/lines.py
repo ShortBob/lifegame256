@@ -32,8 +32,8 @@ class LinerMeta(type):
             if not isinstance(inner_plan, dict):
                 raise ValueError('every item in running_plan have to be dict')
             if not 0 == len(set(mcs.__RUNNING_PLAN_DEF.keys()) ^ set(inner_plan.keys())):
-                raise KeyError('authorised and mandatory keys in running_plan item have to be {}'.format(
-                    mcs.__RUNNING_PLAN_DEF.keys())
+                raise KeyError('authorised and mandatory keys in running_plan item have to be {}. Found: {}'.format(
+                    mcs.__RUNNING_PLAN_DEF.keys(), running_plan)
                 )
             for key, value in inner_plan.items():
                 test_lambda = mcs.__RUNNING_PLAN_DEF[key]

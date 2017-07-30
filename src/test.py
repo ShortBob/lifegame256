@@ -31,8 +31,14 @@ def custom(running_plan, seed=(1,)):
         print(line)
 
 
-def every_256_on_n_lines(number_of_line_to_print, seed):
-    custom(number_of_line_to_print, seed)
+def every_256_on_n_lines(lines, seed='X'):
+    for i in range(0, 2**8):
+        running_plan = ({
+            'direction': '+',
+            'automate': i,
+            'lines': lines
+        },)
+        custom(running_plan, seed)
 
 
 def rule_to_file(rule_number, number_of_line_to_print, file_path_string, pyramidal=False):
@@ -47,15 +53,15 @@ def rule_to_file(rule_number, number_of_line_to_print, file_path_string, pyramid
 
 
 if __name__ == '__main__':
-    custom(
-        (
-            {'direction': '+', 'automate': 101, 'lines': 20},
-            {'direction': '=', 'automate': 101, 'lines': 20},
-            {'direction': '-', 'automate': 101, 'lines': 20},
-        ),
-        # seed=' X XXXX  X    X  XX  XXX   X   XX   X  ',
-        # seed='X XX       XXXXXXXXXXX                    XXXXX         XXXXXXX  XXX  XXX           X',
-        seed='X',
-    )
-    # every_256_on_n_lines(30, seed='X XX       XXXXXXXXXXX                    XXXXX         XXXXXXX  XXX  XXX           X')
+    # custom(
+    #     (
+    #         {'direction': '+', 'automate': 101, 'lines': 20},
+    #         {'direction': '=', 'automate': 101, 'lines': 20},
+    #         {'direction': '-', 'automate': 101, 'lines': 20},
+    #     ),
+    #     seed=' X XXXX  X    X  XX  XXX   X   XX   X  ',
+    #     # seed='X XX       XXXXXXXXXXX                    XXXXX         XXXXXXX  XXX  XXX           X',
+    #     # seed='X',
+    # )
+    every_256_on_n_lines(30, seed='X')
     # rule_to_file(101, 3000, 'automate101')
